@@ -8,6 +8,7 @@ import (
 	"iter"
 
 	"github.com/gobwas/glob"
+	"github.com/invopop/jsonschema"
 	"gopkg.in/yaml.v3"
 )
 
@@ -44,6 +45,31 @@ func (dc GlobDefinitionCriteria) PortOfInterest(port int) bool {
 	return false
 }
 
+// MetadataMap is a map of Kubernetes attribute names to glob patterns.
+// It restricts the allowed keys to valid Kubernetes metadata attribute names.
+type MetadataMap map[string]*GlobAttr
+
+// JSONSchema returns a JSON Schema that restricts the property names to the allowed
+// Kubernetes metadata attribute names (k8s_namespace, k8s_pod_name, etc.).
+func (MetadataMap) JSONSchema() *jsonschema.Schema {
+	// Get all allowed attribute names from the allowedAttributeNames map
+	allowedKeys := make([]any, 0, len(allowedAttributeNames))
+	for k := range allowedAttributeNames {
+		allowedKeys = append(allowedKeys, k)
+	}
+
+	return &jsonschema.Schema{
+		Type: "object",
+		PropertyNames: &jsonschema.Schema{
+			Type: "string",
+			Enum: allowedKeys,
+		},
+		AdditionalProperties: jsonschema.TrueSchema,
+		Title:                "Kubernetes Metadata Attributes",
+		Description:          "Map of Kubernetes metadata attribute names to glob patterns for matching. Allowed keys: k8s_namespace, k8s_pod_name, k8s_deployment_name, k8s_replicaset_name, k8s_daemonset_name, k8s_statefulset_name, k8s_job_name, k8s_cronjob_name, k8s_owner_name, k8s_container_name",
+	}
+}
+
 type GlobAttributes struct {
 	// Name will define a name for the matching service. If unset, it will take the name of the executable process,
 	// from the OTEL_SERVICE_NAME env var of the instrumented process, or from other metadata like Kubernetes annotations.
@@ -62,8 +88,10 @@ type GlobAttributes struct {
 	// Path allows defining the regular expression matching the full executable path.
 	Path GlobAttr `yaml:"exe_path"`
 
-	// Metadata stores other attributes, such as Kubernetes object metadata
-	Metadata map[string]*GlobAttr `yaml:",inline"`
+	// Metadata stores other attributes, such as Kubernetes object metadata.
+	// Allowed keys: k8s_namespace, k8s_pod_name, k8s_deployment_name, k8s_replicaset_name,
+	// k8s_daemonset_name, k8s_statefulset_name, k8s_job_name, k8s_cronjob_name, k8s_owner_name, k8s_container_name
+	Metadata MetadataMap `yaml:",inline"`
 
 	// PodLabels allows matching against the labels of a pod
 	PodLabels map[string]*GlobAttr `yaml:"k8s_pod_labels"`
